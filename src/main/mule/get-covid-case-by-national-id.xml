@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<db:config name="DbConfig" doc:name="Database Config" doc:id="ddf38903-7370-4c8f-956f-5c5a39263c44" >
+		<db:my-sql-connection host="172.22.0.2" port="3306" user="ghani" password="ghani" database="mule" />
+	</db:config>
+	<flow name="get-covid-cases-by-national-idFlow" doc:id="2f8fb005-4c64-44b9-b999-6881babf1474" >
+		<http:listener doc:name="Listener" doc:id="88a8d1d4-d3b2-47f1-9088-63a9c39bc364" config-ref="error-handling" path="v1/cases/{nationalID}" allowedMethods="GET">
+			<http:response statusCode="#[vars.statusCode]" reasonPhrase="#[vars.statusReason]"/>
+			<http:error-response statusCode="#[vars.statusCode]" >
+				<http:body ><![CDATA[#[payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="be9481c5-a1bc-4ea0-97d4-06dcdc232c9a" message="#[attributes.uriParams.nationalID]"/>
+		<ee:transform doc:name="Transform Message" doc:id="d1cdbb12-86d0-4a9c-a62f-434196ba80f0" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="NationalIdPayload" ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	national_id : attributes.uriParams.'nationalID' as String
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:select doc:name="Select" doc:id="a42bacd7-3706-42c5-bed0-94444c057f00" config-ref="DbConfig">
+			<db:sql ><![CDATA[select * from CVD_CASE_MASTER where NATIONAL_ID = :national_id]]></db:sql>
+			<db:input-parameters ><![CDATA[#[vars.NationalIdPayload]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="89d43d10-c59c-4593-a6d8-9d7564bcc240" >
+			<when expression="#[sizeOf(payload) &gt; 0]">
+				<ee:transform doc:name="Transform Message" doc:id="7a290852-7f8f-47c0-af15-7b091c29fc9c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map (covidCase, index) -> {
+	caesID : covidCase.CASE_ID,
+	source : covidCase.Source,
+	caseType : covidCase.CASE_TYPE,
+	firstName : covidCase.FIRST_NAME,
+	laseName : covidCase.LAST_NAME,
+	phone : covidCase.PHONE,
+	email : covidCase.EMAIL,
+	dateOfBirth : covidCase.DATE_OF_BIRTH,
+	nationlId : covidCase.NATIONAL_ID,
+	nationalIDType : covidCase.NATIONAL_ID_TYPE,
+	address : {
+		streetAddress : covidCase.STREET_ADDRESS,
+		city : covidCase.CITY
+	},
+	createDate : covidCase.CREATE_DATE as String {format: "yyyy-MM-dd"},
+	updateDate : covidCase.UPDATE_DATE as String {format : "yyyy-MM-dd"}	}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
+output application/java
+---
+200]]></ee:set-variable>
+						<ee:set-variable variableName="statusReason" ><![CDATA[%dw 2.0
+output application/java
+---
+"Ok"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<raise-error doc:name="Raise Not Found Error" doc:id="43b14cee-b30c-4a1c-9653-053a62fb5033" type="CUSTOM:NOT_FOUND_DATA" description="Not Found"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5aa231b2-c7cf-4706-9459-c9e847b51f08" type="CUSTOM:NOT_FOUND_DATA">
+				<ee:transform doc:name="Transform Message" doc:id="5f174386-9aab-45a3-8a7a-c6315142429f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	code : 404,
+	message : error.description
+}
+]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="statusCode"><![CDATA[%dw 2.0
+output application/java
+---
+404]]></ee:set-variable>
+						<ee:set-variable variableName="statusReason"><![CDATA[%dw 2.0
+output application/java
+---
+"Not Found"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="8f667278-19e0-461a-808c-bbab026cf9c5" type="DB:CONNECTIVITY">
+				<ee:transform doc:name="Transform Message" doc:id="a836c78d-c014-4a00-b4a1-2f10735db1b4" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	code : 503,
+	message : "Service unavailable"
+}
+]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
+output application/java
+---
+503]]></ee:set-variable>
+						<ee:set-variable variableName="statusReason" ><![CDATA[%dw 2.0
+output application/java
+---
+"Not Found"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="94e6c47b-5a6c-4468-89ec-807df01e89da" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="7d2e2283-0e2c-4739-993d-e5ff8272be84" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	code : 500,
+	message : "Server Error"
+}
+]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
+output application/java
+---
+500]]></ee:set-variable>
+						<ee:set-variable variableName="statusReason" ><![CDATA[%dw 2.0
+output application/java
+---
+"Not Found"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>

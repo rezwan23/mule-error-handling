@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd"><http:listener-config name="error-handling" doc:name="HTTP Listener config" doc:id="0a2505ae-2c91-4543-b633-d10b29ac711f" basePath="covid" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<flow name="register-covid-caseFlow" doc:id="b1092342-34b8-4098-88d2-4fc423741dff" >
+		<http:listener doc:name="Listener" doc:id="b83b2b20-956b-49d0-9112-cc071e8827ea" config-ref="error-handling" path="v1/cases" allowedMethods="POST">
+			<http:error-response statusCode="#[vars.statusCode]">
+				<http:body ><![CDATA[#[payload]]]></http:body>
+			</http:error-response>
+		</http:listener>
+		<logger level="INFO" doc:name="StartLog" doc:id="c72bb065-66a0-4966-83e8-25de2e0fbdd2" message="#[payload]"/>
+		<json:validate-schema doc:name="Validate schema" doc:id="2eabe8fd-adde-48c9-9371-7fff7f5fc7ad" schema="schemas/register-covid-case.json"/>
+		<ee:transform doc:name="Transform Message" doc:id="ce7747dc-e54e-41bb-a97f-0c0c011697ea">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="covidPayload"><![CDATA[%dw 2.0
+output application/java
+var actionDate = now() as String {format : "yyyy-MM-dd"}
+var owner = "Ghani"
+---
+{
+	SOURCE: payload.source,
+	NATIONAL_ID: payload.nationalID,
+	STREET_ADDRESS: payload.address.streetAddress,
+	COUNTRY: payload.address.country,
+	CITY: payload.address.city,
+	DATE_OF_BIRTH: payload.dateOfBirth,
+	CASE_TYPE: payload.caseType,
+	LAST_NAME: payload.lastName,
+	NATIONAL_ID_TYPE: payload.nationalIDType,
+	UPDATE_DATE: actionDate,
+	CREATE_BY: owner,
+	EMAIL: payload.email,
+	FIRST_NAME: payload.firstName,
+	POSTAL: payload.address.postal,
+	CREATE_DATE: actionDate,
+	UPDATE_BY: owner,
+	STATE: payload.address.state,
+	PHONE: payload.phone
+}]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<db:insert doc:name="Insert" doc:id="e6f191ef-eeae-4412-87e5-20c6d933593a" config-ref="DbConfig">
+			<error-mapping sourceType="DB:CONNECTIVITY" targetType="CUSTOM:CONNECTIVITY" />
+			<db:sql ><![CDATA[INSERT INTO CVD_CASE_MASTER  (SOURCE, CASE_TYPE,  FIRST_NAME,  LAST_NAME,  PHONE, 
+                 EMAIL,  DATE_OF_BIRTH,  NATIONAL_ID,  NATIONAL_ID_TYPE,  STREET_ADDRESS, 
+                 CITY,  STATE,  POSTAL, COUNTRY,  CREATE_DATE, UPDATE_DATE,  CREATE_BY,  UPDATE_BY) 
+                 
+                 VALUES (:SOURCE, :CASE_TYPE,  :FIRST_NAME,  :LAST_NAME,  :PHONE, 
+                 :EMAIL,  :DATE_OF_BIRTH,  :NATIONAL_ID,  :NATIONAL_ID_TYPE,  :STREET_ADDRESS, 
+                 :CITY,  :STATE,  :POSTAL, :COUNTRY,  :CREATE_DATE, :UPDATE_DATE,  :CREATE_BY,  :UPDATE_BY) ]]></db:sql>
+			<db:input-parameters ><![CDATA[#[vars.covidPayload]]]></db:input-parameters>
+		</db:insert>
+		<http:request method="GET" doc:name="Request" doc:id="e7f68c68-5738-47d3-ac6e-340ebd719b29" url="https://google.com">
+			<error-mapping sourceType="HTTP:CONNECTIVITY" targetType="CUSTOM:CONNECTIVITY" />
+		</http:request>
+		<db:select doc:name="Select" doc:id="11583b5b-5b3a-4fc9-b08b-8d3a8aea1aaf" config-ref="DbConfig">
+			<db:sql ><![CDATA[select max(CASE_ID) from CVD_CASE_MASTER where NATIONAL_ID = :national_id]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	national_id : vars.covidPayload.NATIONAL_ID
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="be455be6-b6ee-4dd0-b11d-22bc1ac3ddf3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	caseID : payload[0]."max(CASE_ID)"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="20f45a20-317e-49c0-87ed-8ca26d6c293d" type="JSON:SCHEMA_NOT_HONOURED">
+				<ee:transform doc:name="Transform Message" doc:id="1dc9ae2f-be31-4253-86ee-faf60ba5ce52">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"code" : 422,
+	"message" : "Bad Request",
+	"description" : error.errorMessage.payload.message[0] as String,
+	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+	"transactionId" : uuid() 
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="statusCode"><![CDATA[423]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="8afb5435-f2fc-4aef-baaf-8139528de96f" type="CUSTOM:CONNECTIVITY">
+				<ee:transform doc:name="Transform Message" doc:id="02549076-29f5-433f-bb5c-512b8281f515" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"code" : 503,
+	"message" : "Bad Request",
+	"description" : "Service Unavailable",
+	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+	"transactionId" : uuid() 
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[503]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="89569614-697a-41ff-b8f9-908cf8e828ad" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="180a4cd5-779f-49a3-b19f-1e0a94c8886f" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"code" : 500,
+	"message" : "Bad Request",
+	"description" : "Internal Service Error",
+	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+	"transactionId" : uuid() 
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="statusCode" ><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	</mule>
