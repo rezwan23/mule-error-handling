@@ -9,16 +9,17 @@
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
-	<db:config name="DbConfig" doc:name="Database Config" doc:id="ddf38903-7370-4c8f-956f-5c5a39263c44" >
-		<db:my-sql-connection host="172.22.0.2" port="3306" user="ghani" password="ghani" database="mule" />
-	</db:config>
-	<flow name="get-covid-cases-by-national-idFlow" doc:id="2f8fb005-4c64-44b9-b999-6881babf1474" >
+	
+	<flow name="get-covid-case-by-national-idFlow" doc:id="f7cf8472-9e80-473d-810d-41d44e3881be" >
 		<http:listener doc:name="Listener" doc:id="88a8d1d4-d3b2-47f1-9088-63a9c39bc364" config-ref="error-handling" path="v1/cases/{nationalID}" allowedMethods="GET">
-			<http:response statusCode="#[vars.statusCode]" reasonPhrase="#[vars.statusReason]"/>
-			<http:error-response statusCode="#[vars.statusCode]" >
-				<http:body ><![CDATA[#[payload]]]></http:body>
+			<http:response statusCode="#[vars.statusCode]"/>
+			<http:error-response statusCode="#[vars.statusCode]">
+				<http:body><![CDATA[#[payload]]]></http:body>
 			</http:error-response>
 		</http:listener>
+		<flow-ref doc:name="Flow Reference" doc:id="33e8ce18-b1f1-413c-844c-1ce7b0ad15e5" name="get-covid-cases-by-national-idFlow"/>
+	</flow>
+	<flow name="get-covid-cases-by-national-idFlow" doc:id="2f8fb005-4c64-44b9-b999-6881babf1474" >
 		<logger level="INFO" doc:name="Logger" doc:id="be9481c5-a1bc-4ea0-97d4-06dcdc232c9a" message="#[attributes.uriParams.nationalID]"/>
 		<ee:transform doc:name="Transform Message" doc:id="d1cdbb12-86d0-4a9c-a62f-434196ba80f0" >
 			<ee:message >
@@ -82,79 +83,26 @@ output application/java
 				<raise-error doc:name="Raise Not Found Error" doc:id="43b14cee-b30c-4a1c-9653-053a62fb5033" type="CUSTOM:NOT_FOUND_DATA" description="Not Found"/>
 			</otherwise>
 		</choice>
-		<error-handler >
-			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5aa231b2-c7cf-4706-9459-c9e847b51f08" type="CUSTOM:NOT_FOUND_DATA">
-				<ee:transform doc:name="Transform Message" doc:id="5f174386-9aab-45a3-8a7a-c6315142429f">
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="9ac38bdb-4872-437a-962a-8845f16576dc" type="CUSTOM:NOT_FOUND_DATA">
+				<ee:transform doc:name="Transform Message" doc:id="d64e51ee-ad78-4fc2-88c1-8e38484a6632">
 					<ee:message>
 						<ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
 {
-	code : 404,
-	message : error.description
-}
-]]></ee:set-payload>
+	"code" : "422",
+	"description" : error.description
+}]]></ee:set-payload>
 					</ee:message>
 					<ee:variables>
 						<ee:set-variable variableName="statusCode"><![CDATA[%dw 2.0
 output application/java
 ---
-404]]></ee:set-variable>
-						<ee:set-variable variableName="statusReason"><![CDATA[%dw 2.0
-output application/java
----
-"Not Found"]]></ee:set-variable>
+422]]></ee:set-variable>
 					</ee:variables>
 				</ee:transform>
-			</on-error-propagate>
-			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="8f667278-19e0-461a-808c-bbab026cf9c5" type="DB:CONNECTIVITY">
-				<ee:transform doc:name="Transform Message" doc:id="a836c78d-c014-4a00-b4a1-2f10735db1b4" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	code : 503,
-	message : "Service unavailable"
-}
-]]></ee:set-payload>
-					</ee:message>
-					<ee:variables >
-						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
-output application/java
----
-503]]></ee:set-variable>
-						<ee:set-variable variableName="statusReason" ><![CDATA[%dw 2.0
-output application/java
----
-"Not Found"]]></ee:set-variable>
-					</ee:variables>
-				</ee:transform>
-			</on-error-propagate>
-			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="94e6c47b-5a6c-4468-89ec-807df01e89da" type="ANY">
-				<ee:transform doc:name="Transform Message" doc:id="7d2e2283-0e2c-4739-993d-e5ff8272be84" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	code : 500,
-	message : "Server Error"
-}
-]]></ee:set-payload>
-					</ee:message>
-					<ee:variables >
-						<ee:set-variable variableName="statusCode" ><![CDATA[%dw 2.0
-output application/java
----
-500]]></ee:set-variable>
-						<ee:set-variable variableName="statusReason" ><![CDATA[%dw 2.0
-output application/java
----
-"Not Found"]]></ee:set-variable>
-					</ee:variables>
-				</ee:transform>
-			</on-error-propagate>
+			</on-error-continue>
 		</error-handler>
 	</flow>
 </mule>

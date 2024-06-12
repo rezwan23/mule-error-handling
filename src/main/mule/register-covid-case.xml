@@ -9,9 +9,7 @@
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd"><http:listener-config name="error-handling" doc:name="HTTP Listener config" doc:id="0a2505ae-2c91-4543-b633-d10b29ac711f" basePath="covid" >
-		<http:listener-connection host="0.0.0.0" port="8082" />
-	</http:listener-config>
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
 	<flow name="register-covid-caseFlow" doc:id="b1092342-34b8-4098-88d2-4fc423741dff" >
 		<http:listener doc:name="Listener" doc:id="b83b2b20-956b-49d0-9112-cc071e8827ea" config-ref="error-handling" path="v1/cases" allowedMethods="POST">
 			<http:error-response statusCode="#[vars.statusCode]">
@@ -98,44 +96,6 @@ output application/json
 					</ee:message>
 					<ee:variables>
 						<ee:set-variable variableName="statusCode"><![CDATA[423]]></ee:set-variable>
-					</ee:variables>
-				</ee:transform>
-			</on-error-propagate>
-			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="8afb5435-f2fc-4aef-baaf-8139528de96f" type="CUSTOM:CONNECTIVITY">
-				<ee:transform doc:name="Transform Message" doc:id="02549076-29f5-433f-bb5c-512b8281f515" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	"code" : 503,
-	"message" : "Bad Request",
-	"description" : "Service Unavailable",
-	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
-	"transactionId" : uuid() 
-}]]></ee:set-payload>
-					</ee:message>
-					<ee:variables >
-						<ee:set-variable variableName="statusCode" ><![CDATA[503]]></ee:set-variable>
-					</ee:variables>
-				</ee:transform>
-			</on-error-propagate>
-			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="89569614-697a-41ff-b8f9-908cf8e828ad" type="ANY">
-				<ee:transform doc:name="Transform Message" doc:id="180a4cd5-779f-49a3-b19f-1e0a94c8886f" >
-					<ee:message >
-						<ee:set-payload ><![CDATA[%dw 2.0
-output application/json
----
-{
-	"code" : 500,
-	"message" : "Bad Request",
-	"description" : "Internal Service Error",
-	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
-	"transactionId" : uuid() 
-}]]></ee:set-payload>
-					</ee:message>
-					<ee:variables >
-						<ee:set-variable variableName="statusCode" ><![CDATA[500]]></ee:set-variable>
 					</ee:variables>
 				</ee:transform>
 			</on-error-propagate>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd"><http:listener-config name="error-handling" doc:name="HTTP Listener config" doc:id="3ed6089a-41c1-4b0e-ab07-ac50e66668f8" basePath="covid" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config><db:config name="DbConfig" doc:name="Database Config" doc:id="f5a5c911-c8c6-43fe-a983-62078090e550" >
+		<db:my-sql-connection host="172.22.0.3" port="3306" user="ghani" password="ghani" database="mule" />
+	</db:config>
+	<error-handler name="global-error-handler" doc:id="97256a70-1d7f-4471-8dbd-4800b94b4d75" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate1" doc:id="1798dbc0-40a0-4444-ab12-6e64da1d4026" type="DB:CONNECTIVITY">
+			<ee:transform doc:name="Transform Message" doc:id="b4b99585-b45d-4a73-92e3-732cc47f70dd">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"code" : 500,
+	"message" : "Bad Request",
+	"description" : "Internal Service Error",
+	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+	"transactionId" : uuid() 
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="statusCode"><![CDATA[500]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="9fb92e59-1406-4cb6-985e-d12845c34e6f" type="ANY" >
+			<ee:transform doc:name="Transform Message" doc:id="6831163f-db59-4a7e-989b-84726ce85b49" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"code" : 503,
+	"message" : "Bad Request",
+	"description" : "Service Unavailable",
+	"dateTime" : now() as String {format : "yyyy-MM-dd'T'HH:mm:ss'Z'"},
+	"transactionId" : uuid() 
+}]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="statusCode" ><![CDATA[503]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</on-error-propagate>
+		
+	</error-handler>
+</mule>
